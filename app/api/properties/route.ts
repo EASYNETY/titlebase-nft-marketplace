@@ -12,73 +12,65 @@ export async function GET(request: NextRequest) {
     const minPrice = searchParams.get("minPrice")
     const maxPrice = searchParams.get("maxPrice")
     const location = searchParams.get("location")
-    const status = searchParams.get("status") || "verified"
+    const status = searchParams.get("status") || "active"
 
     let query = `
-      SELECT p.*, u.name as owner_username, u.email as owner_email
+      SELECT p.*, u.username as owner_username, u.wallet_address as owner_address
       FROM properties p
-      LEFT JOIN users_sync u ON p.owner_id = u.id
+      LEFT JOIN users u ON p.owner_id = u.id
       WHERE 1=1
     `
     const params: any[] = []
-    let paramIndex = 1
 
     if (status) {
-      query += ` AND p.verification_status = $${paramIndex}`
+      query += " AND p.verification_status = ?"
       params.push(status)
-      paramIndex++
     }
     if (category) {
-      query += ` AND p.property_type = $${paramIndex}`
+      query += " AND p.property_type = ?"
       params.push(category)
-      paramIndex++
     }
     if (location) {
-      query += ` AND p.address ILIKE $${paramIndex}`
+      query += " AND p.address LIKE ?"
       params.push(`%${location}%`)
-      paramIndex++
     }
 
-    query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
+    query += " ORDER BY p.created_at DESC LIMIT ? OFFSET ?"
     params.push(limit, (page - 1) * limit)
 
-    const properties = await executeQuery(query, params)
+    const properties = (await executeQuery(query, params)) as any[]
 
     // Get total count for pagination
     let countQuery = "SELECT COUNT(*) as total FROM properties p WHERE 1=1"
     const countParams: any[] = []
-    let countParamIndex = 1
 
     if (status) {
-      countQuery += ` AND p.verification_status = $${countParamIndex}`
+      countQuery += " AND p.verification_status = ?"
       countParams.push(status)
-      countParamIndex++
     }
     if (category) {
-      countQuery += ` AND p.property_type = $${countParamIndex}`
+      countQuery += " AND p.property_type = ?"
       countParams.push(category)
-      countParamIndex++
     }
     if (location) {
-      countQuery += ` AND p.address ILIKE $${countParamIndex}`
+      countQuery += " AND p.address LIKE ?"
       countParams.push(`%${location}%`)
-      countParamIndex++
     }
 
-    const countResult = await executeQuery(countQuery, countParams)
-    const total = countResult[0]?.total || 0
+    const [{ total }] = (await executeQuery(countQuery, countParams)) as any[]
 
     return NextResponse.json({
-      properties: properties.map((p: any) => ({
+      properties: properties.map((p) => ({
         ...p,
-        images: p.images || [],
-        documents: p.documents || [],
+        images: p.images ? JSON.parse(p.images) : [],
+        documents: p.documents ? JSON.parse(p.documents) : [],
+        verification_documents: p.verification_documents ? JSON.parse(p.verification_documents) : [],
       })),
       pagination: {
         page,
         limit,
-        total: Number(total),
-        pages: Math.ceil(Number(total) / limit),
+        total,
+        pages: Math.ceil(total / limit),
       },
     })
   } catch (error) {
@@ -104,64 +96,55 @@ export async function POST(request: NextRequest) {
       title,
       description,
       address,
-      city,
-      state,
-      zip_code,
       property_type,
-      square_feet,
+      square_footage,
       bedrooms,
       bathrooms,
       year_built,
       lot_size,
-      estimated_value,
       images,
       documents,
     } = body
 
     // Validate required fields
-    if (!title || !description || !address || !city || !state || !zip_code || !property_type) {
+    if (!title || !description || !address || !property_type) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
     const propertyId = uuidv4()
     const query = `
       INSERT INTO properties (
-        id, owner_id, title, description, address, city, state, zip_code, property_type,
-        square_feet, bedrooms, bathrooms, year_built, lot_size, estimated_value,
-        images, documents, verification_status, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW(), NOW())
-      RETURNING *
+        id, owner_id, title, description, address, property_type,
+        square_footage, bedrooms, bathrooms, year_built, lot_size,
+        images, documents, verification_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
     `
 
-    const result = await executeQuery(query, [
+    await executeQuery(query, [
       propertyId,
       user.id,
       title,
       description,
       address,
-      city,
-      state,
-      zip_code,
       property_type,
-      square_feet || null,
+      square_footage || null,
       bedrooms || null,
       bathrooms || null,
       year_built || null,
       lot_size || null,
-      estimated_value || null,
       JSON.stringify(images || []),
       JSON.stringify(documents || []),
-      "pending",
     ])
 
-    const property = result[0]
+    // Fetch the created property
+    const [property] = (await executeQuery("SELECT * FROM properties WHERE id = ?", [propertyId])) as any[]
 
     return NextResponse.json(
       {
         property: {
           ...property,
-          images: property.images || [],
-          documents: property.documents || [],
+          images: property.images ? JSON.parse(property.images) : [],
+          documents: property.documents ? JSON.parse(property.documents) : [],
         },
       },
       { status: 201 },
