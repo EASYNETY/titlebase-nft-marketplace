@@ -1,24 +1,126 @@
-import { neon } from "@neondatabase/serverless"
+import { promises as fs } from "fs"
+import path from "path"
 
-// Use the DATABASE_URL from Neon integration
-const sql = neon(process.env.DATABASE_URL!)
+const DATA_DIR = path.join(process.cwd(), "data")
 
-export async function executeQuery(query: string, params: any[] = []) {
+// Ensure data directory exists
+async function ensureDataDir() {
   try {
-    const results = await sql(query, params)
-    return results
-  } catch (error) {
-    console.error("Database query error:", error)
-    throw error
+    await fs.access(DATA_DIR)
+  } catch {
+    await fs.mkdir(DATA_DIR, { recursive: true })
+  }
+}
+
+// JSON file storage implementation
+export async function executeQuery(query: string, params: any[] = []) {
+  await ensureDataDir()
+
+  // Simple query parsing for basic operations
+  const lowerQuery = query.toLowerCase().trim()
+
+  if (lowerQuery.startsWith("select")) {
+    return await handleSelect(query, params)
+  } else if (lowerQuery.startsWith("insert")) {
+    return await handleInsert(query, params)
+  } else if (lowerQuery.startsWith("update")) {
+    return await handleUpdate(query, params)
+  } else if (lowerQuery.startsWith("delete")) {
+    return await handleDelete(query, params)
+  }
+
+  return []
+}
+
+async function handleSelect(query: string, params: any[]) {
+  // Extract table name from query
+  const tableMatch = query.match(/from\s+(\w+)/i)
+  if (!tableMatch) return []
+
+  const tableName = tableMatch[1]
+  const filePath = path.join(DATA_DIR, `${tableName}.json`)
+
+  try {
+    const data = await fs.readFile(filePath, "utf8")
+    return JSON.parse(data)
+  } catch {
+    return []
+  }
+}
+
+async function handleInsert(query: string, params: any[]) {
+  const tableMatch = query.match(/into\s+(\w+)/i)
+  if (!tableMatch) return []
+
+  const tableName = tableMatch[1]
+  const filePath = path.join(DATA_DIR, `${tableName}.json`)
+
+  // Create mock record with params
+  const record = {
+    id: crypto.randomUUID(),
+    ...Object.fromEntries(params.map((param, index) => [`field_${index}`, param])),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+
+  let records = []
+  try {
+    const data = await fs.readFile(filePath, "utf8")
+    records = JSON.parse(data)
+  } catch {
+    // File doesn't exist, start with empty array
+  }
+
+  records.push(record)
+  await fs.writeFile(filePath, JSON.stringify(records, null, 2))
+
+  return [record]
+}
+
+async function handleUpdate(query: string, params: any[]) {
+  const tableMatch = query.match(/update\s+(\w+)/i)
+  if (!tableMatch) return []
+
+  const tableName = tableMatch[1]
+  const filePath = path.join(DATA_DIR, `${tableName}.json`)
+
+  try {
+    const data = await fs.readFile(filePath, "utf8")
+    const records = JSON.parse(data)
+
+    // Simple update - update all records for demo
+    const updatedRecords = records.map((record: any) => ({
+      ...record,
+      updated_at: new Date().toISOString(),
+    }))
+
+    await fs.writeFile(filePath, JSON.stringify(updatedRecords, null, 2))
+    return updatedRecords
+  } catch {
+    return []
+  }
+}
+
+async function handleDelete(query: string, params: any[]) {
+  const tableMatch = query.match(/from\s+(\w+)/i)
+  if (!tableMatch) return []
+
+  const tableName = tableMatch[1]
+  const filePath = path.join(DATA_DIR, `${tableName}.json`)
+
+  try {
+    await fs.writeFile(filePath, JSON.stringify([], null, 2))
+    return []
+  } catch {
+    return []
   }
 }
 
 export async function executeTransaction(queries: Array<{ query: string; params: any[] }>) {
   try {
-    // Neon handles transactions automatically for multiple queries
     const results = []
     for (const { query, params } of queries) {
-      const result = await sql(query, params)
+      const result = await executeQuery(query, params)
       results.push(result)
     }
     return results
@@ -28,7 +130,15 @@ export async function executeTransaction(queries: Array<{ query: string; params:
   }
 }
 
-// Helper function for getting the SQL client directly
-export function getDatabase() {
-  return sql
+// Helper function for direct file access
+export async function getTableData(tableName: string) {
+  await ensureDataDir()
+  const filePath = path.join(DATA_DIR, `${tableName}.json`)
+
+  try {
+    const data = await fs.readFile(filePath, "utf8")
+    return JSON.parse(data)
+  } catch {
+    return []
+  }
 }
