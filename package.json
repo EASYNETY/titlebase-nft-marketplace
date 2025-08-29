@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.66",
+    "@neondatabase/serverless": "latest",
     "@nomicfoundation/hardhat-chai-matchers": "latest",
     "@nomicfoundation/hardhat-ethers": "latest",
     "@nomicfoundation/hardhat-ignition-ethers": "latest",
@@ -37,7 +38,7 @@
     "hardhat-gas-reporter": "latest",
     "jsonwebtoken": "latest",
     "lucide-react": "^0.454.0",
-    "mysql2": "latest",
+    "mysql2": "^3.6.5",
     "next": "15.2.4",
     "react": "^19",
     "react-dom": "^19",

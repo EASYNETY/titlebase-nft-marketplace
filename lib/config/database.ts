@@ -1,28 +1,11 @@
-import mysql from "mysql2/promise"
+import { neon } from "@neondatabase/serverless"
 
-const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USERNAME || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "titlebase",
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-}
-
-let pool: mysql.Pool | null = null
-
-export function getDatabase() {
-  if (!pool) {
-    pool = mysql.createPool(dbConfig)
-  }
-  return pool
-}
+// Use the DATABASE_URL from Neon integration
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function executeQuery(query: string, params: any[] = []) {
-  const db = getDatabase()
   try {
-    const [results] = await db.execute(query, params)
+    const results = await sql(query, params)
     return results
   } catch (error) {
     console.error("Database query error:", error)
@@ -31,24 +14,21 @@ export async function executeQuery(query: string, params: any[] = []) {
 }
 
 export async function executeTransaction(queries: Array<{ query: string; params: any[] }>) {
-  const db = getDatabase()
-  const connection = await db.getConnection()
-
   try {
-    await connection.beginTransaction()
-
+    // Neon handles transactions automatically for multiple queries
     const results = []
     for (const { query, params } of queries) {
-      const [result] = await connection.execute(query, params)
+      const result = await sql(query, params)
       results.push(result)
     }
-
-    await connection.commit()
     return results
   } catch (error) {
-    await connection.rollback()
+    console.error("Transaction error:", error)
     throw error
-  } finally {
-    connection.release()
   }
+}
+
+// Helper function for getting the SQL client directly
+export function getDatabase() {
+  return sql
 }
