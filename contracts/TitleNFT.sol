@@ -21,6 +21,7 @@ contract TitleNFT is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard, I
     mapping(string => bool) private _propertyIdExists;
     
     address public marketplaceGuard;
+    address public fractionalPropertyContract;
     
     modifier onlyAllowedTransfer(address from, address to, uint256 tokenId) {
         if (marketplaceGuard != address(0)) {
@@ -36,13 +37,15 @@ contract TitleNFT is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard, I
         string memory name,
         string memory symbol,
         address admin,
-        address _marketplaceGuard
+        address _marketplaceGuard,
+        address _fractionalPropertyContract
     ) ERC721(name, symbol) {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MINTER_ROLE, admin);
         _grantRole(VERIFIER_ROLE, admin);
         _grantRole(METADATA_UPDATER_ROLE, admin);
         marketplaceGuard = _marketplaceGuard;
+        fractionalPropertyContract = _fractionalPropertyContract;
     }
 
     function mintTitle(
@@ -96,6 +99,15 @@ contract TitleNFT is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard, I
     function isVerified(uint256 tokenId) external view returns (bool) {
         require(_ownerOf(tokenId) != address(0), "TitleNFT: Token does not exist");
         return _titleMetadata[tokenId].isVerified;
+    }
+
+    function linkToFractionalProperty(uint256 tokenId, uint256 fractionalTokenId) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        require(_ownerOf(tokenId) != address(0), "TitleNFT: Token does not exist");
+        // Additional logic to link title NFT with fractional property token
+        emit TitleLinkedToFractional(tokenId, fractionalTokenId);
     }
 
     function _update(address to, uint256 tokenId, address auth)
