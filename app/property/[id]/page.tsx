@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import Image from "next/image"
 import { Header } from "@/components/layout/header"
@@ -10,17 +10,35 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { MapPin, Verified, TrendingUp, FileText, Shield, Heart, Share } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import {
+  MapPin,
+  Verified,
+  TrendingUp,
+  FileText,
+  Shield,
+  Heart,
+  Share,
+  Users,
+  DollarSign,
+  Calculator,
+  PieChart,
+} from "lucide-react"
 
-// Mock property data
 const propertyData = {
   id: "1",
   title: "Modern Downtown Condo",
   location: "San Francisco, CA",
   fullAddress: "123 Market Street, San Francisco, CA 94105",
-  price: "2.5 ETH",
-  assessedValue: "$850,000",
-  currentBid: "2.3 ETH",
+  totalValue: 850000,
+  totalShares: 1000,
+  availableShares: 650,
+  sharePrice: 850,
+  minInvestment: 1000,
+  maxInvestment: 50000,
+  monthlyRevenue: 4250,
+  annualYield: 6.2,
   images: [
     "/modern-downtown-condo-exterior.png",
     "/modern-condo-living-room.png",
@@ -28,8 +46,7 @@ const propertyData = {
     "/modern-condo-bedroom.png",
   ],
   isVerified: true,
-  isAuction: false,
-  auctionEndTime: null,
+  currentInvestors: 23,
   description:
     "Stunning modern condominium in the heart of downtown San Francisco. This property features floor-to-ceiling windows, premium finishes, and breathtaking city views. Located in a luxury building with concierge services and rooftop amenities.",
   details: {
@@ -48,28 +65,37 @@ const propertyData = {
     verifiedBy: "SF County Recorder",
     verificationDate: "2024-01-15",
   },
-  priceHistory: [
-    { date: "2024-01-01", price: "2.2 ETH" },
-    { date: "2024-01-15", price: "2.4 ETH" },
-    { date: "2024-02-01", price: "2.5 ETH" },
+  revenueHistory: [
+    { month: "Jan 2024", revenue: 4100, yield: 5.8 },
+    { month: "Feb 2024", revenue: 4250, yield: 6.1 },
+    { month: "Mar 2024", revenue: 4300, yield: 6.2 },
+  ],
+  topInvestors: [
+    { address: "0x1234...5678", shares: 85, percentage: 8.5 },
+    { address: "0x2345...6789", shares: 72, percentage: 7.2 },
+    { address: "0x3456...7890", shares: 68, percentage: 6.8 },
   ],
 }
 
 export default function PropertyDetailPage() {
   const params = useParams()
   const [selectedImage, setSelectedImage] = useState(0)
-  const [bidAmount, setBidAmount] = useState("")
+  const [investmentAmount, setInvestmentAmount] = useState("")
+  const [calculatedShares, setCalculatedShares] = useState(0)
   const [isFavorited, setIsFavorited] = useState(false)
 
-  const handleBuyNow = () => {
-    // Implement buy now logic
-    console.log("Buy now clicked")
+  useEffect(() => {
+    const amount = Number.parseFloat(investmentAmount) || 0
+    const shares = Math.floor(amount / propertyData.sharePrice)
+    setCalculatedShares(shares)
+  }, [investmentAmount])
+
+  const handleInvest = () => {
+    // Implement investment logic
+    console.log("Invest:", investmentAmount, "shares:", calculatedShares)
   }
 
-  const handlePlaceBid = () => {
-    // Implement bid logic
-    console.log("Place bid:", bidAmount)
-  }
+  const fundingProgress = ((propertyData.totalShares - propertyData.availableShares) / propertyData.totalShares) * 100
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -138,42 +164,155 @@ export default function PropertyDetailPage() {
             </div>
           </div>
 
-          {/* Price and Action */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="space-y-1">
-              <div className="text-3xl font-bold text-primary">{propertyData.price}</div>
-              <div className="text-sm text-muted-foreground">Assessed Value: {propertyData.assessedValue}</div>
-            </div>
-
-            <div className="flex gap-3">
-              {propertyData.isAuction ? (
-                <div className="flex gap-2 w-full md:w-auto">
-                  <Input
-                    placeholder="Enter bid amount"
-                    value={bidAmount}
-                    onChange={(e) => setBidAmount(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button onClick={handlePlaceBid} className="shrink-0">
-                    Place Bid
-                  </Button>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5" />
+                  Investment Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Property Value</span>
+                    <span className="font-bold">${propertyData.totalValue.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price per Share</span>
+                    <span className="font-bold">${propertyData.sharePrice}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Available Shares</span>
+                    <span className="font-bold">{propertyData.availableShares.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current Investors</span>
+                    <span className="font-bold">{propertyData.currentInvestors}</span>
+                  </div>
                 </div>
-              ) : (
-                <Button onClick={handleBuyNow} size="lg" className="w-full md:w-auto">
-                  Buy Now
-                </Button>
-              )}
-            </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Funding Progress</span>
+                    <span className="text-sm text-muted-foreground">{fundingProgress.toFixed(1)}%</span>
+                  </div>
+                  <Progress value={fundingProgress} className="h-2" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  Revenue & Returns
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Monthly Revenue</span>
+                    <span className="font-bold text-green-600">${propertyData.monthlyRevenue.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Annual Yield</span>
+                    <span className="font-bold text-green-600">{propertyData.annualYield}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Min Investment</span>
+                    <span className="font-medium">${propertyData.minInvestment.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Max Investment</span>
+                    <span className="font-medium">${propertyData.maxInvestment.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calculator className="w-5 h-5" />
+                Investment Calculator
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Investment Amount ($)</label>
+                  <Input
+                    type="number"
+                    placeholder="Enter amount"
+                    value={investmentAmount}
+                    onChange={(e) => setInvestmentAmount(e.target.value)}
+                    min={propertyData.minInvestment}
+                    max={propertyData.maxInvestment}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Min: ${propertyData.minInvestment.toLocaleString()} • Max: $
+                    {propertyData.maxInvestment.toLocaleString()}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Shares to Purchase</label>
+                  <div className="h-10 px-3 py-2 border rounded-md bg-muted flex items-center">
+                    <span className="font-medium">{calculatedShares.toLocaleString()}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {calculatedShares > 0 &&
+                      `${((calculatedShares / propertyData.totalShares) * 100).toFixed(2)}% ownership`}
+                  </div>
+                </div>
+              </div>
+
+              {calculatedShares > 0 && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg space-y-2">
+                  <h4 className="font-medium">Projected Monthly Returns</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Monthly Income:</span>
+                      <div className="font-bold text-green-600">
+                        ${((propertyData.monthlyRevenue * calculatedShares) / propertyData.totalShares).toFixed(2)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Annual Income:</span>
+                      <div className="font-bold text-green-600">
+                        ${((propertyData.monthlyRevenue * 12 * calculatedShares) / propertyData.totalShares).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Button
+                onClick={handleInvest}
+                size="lg"
+                className="w-full"
+                disabled={!calculatedShares || calculatedShares > propertyData.availableShares}
+              >
+                {calculatedShares > propertyData.availableShares
+                  ? "Not Enough Shares Available"
+                  : `Invest $${investmentAmount || "0"}`}
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Property Details Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="investors">Investors</TabsTrigger>
+            <TabsTrigger value="revenue">Revenue</TabsTrigger>
             <TabsTrigger value="title">Title Info</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="details">Details</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -239,51 +378,95 @@ export default function PropertyDetailPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="details">
+          <TabsContent value="investors" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Property Details</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Current Investors
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Property Type</span>
-                      <span className="font-medium">{propertyData.details.propertyType}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Bedrooms</span>
-                      <span className="font-medium">{propertyData.details.bedrooms}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Bathrooms</span>
-                      <span className="font-medium">{propertyData.details.bathrooms}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Square Feet</span>
-                      <span className="font-medium">{propertyData.details.sqft.toLocaleString()}</span>
-                    </div>
+                <div className="grid md:grid-cols-3 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{propertyData.currentInvestors}</div>
+                    <div className="text-sm text-muted-foreground">Total Investors</div>
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Year Built</span>
-                      <span className="font-medium">{propertyData.details.yearBuilt}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Lot Size</span>
-                      <span className="font-medium">{propertyData.details.lotSize}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Full Address</span>
-                      <span className="font-medium text-right">{propertyData.fullAddress}</span>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{propertyData.totalShares - propertyData.availableShares}</div>
+                    <div className="text-sm text-muted-foreground">Shares Sold</div>
                   </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{fundingProgress.toFixed(1)}%</div>
+                    <div className="text-sm text-muted-foreground">Funded</div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-medium">Top Investors</h4>
+                  {propertyData.topInvestors.map((investor, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                          <span className="text-xs font-medium">#{index + 1}</span>
+                        </div>
+                        <div>
+                          <div className="font-mono text-sm">{investor.address}</div>
+                          <div className="text-xs text-muted-foreground">{investor.percentage}% ownership</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">{investor.shares} shares</div>
+                        <div className="text-xs text-muted-foreground">
+                          ${(investor.shares * propertyData.sharePrice).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="title">
+          <TabsContent value="revenue" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="w-5 h-5" />
+                  Revenue History
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      ${propertyData.monthlyRevenue.toLocaleString()}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Current Monthly Revenue</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">{propertyData.annualYield}%</div>
+                    <div className="text-sm text-muted-foreground">Annual Yield</div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-medium">Recent Performance</h4>
+                  {propertyData.revenueHistory.map((entry, index) => (
+                    <div key={index} className="flex justify-between items-center py-3 border-b last:border-b-0">
+                      <span className="font-medium">{entry.month}</span>
+                      <div className="text-right">
+                        <div className="font-medium">${entry.revenue.toLocaleString()}</div>
+                        <div className="text-sm text-green-600">{entry.yield}% yield</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="title" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -324,19 +507,45 @@ export default function PropertyDetailPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="history">
+          <TabsContent value="details" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Price History</CardTitle>
+                <CardTitle>Property Details</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {propertyData.priceHistory.map((entry, index) => (
-                    <div key={index} className="flex justify-between items-center py-2 border-b last:border-b-0">
-                      <span className="text-sm text-muted-foreground">{entry.date}</span>
-                      <span className="font-medium">{entry.price}</span>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Property Type</span>
+                      <span className="font-medium">{propertyData.details.propertyType}</span>
                     </div>
-                  ))}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Bedrooms</span>
+                      <span className="font-medium">{propertyData.details.bedrooms}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Bathrooms</span>
+                      <span className="font-medium">{propertyData.details.bathrooms}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Square Feet</span>
+                      <span className="font-medium">{propertyData.details.sqft.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Year Built</span>
+                      <span className="font-medium">{propertyData.details.yearBuilt}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Lot Size</span>
+                      <span className="font-medium">{propertyData.details.lotSize}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Full Address</span>
+                      <span className="font-medium text-right">{propertyData.fullAddress}</span>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
