@@ -1,5 +1,6 @@
 import { promises as fs } from "fs"
 import path from "path"
+import crypto from "crypto"
 
 const DATA_DIR = path.join(process.cwd(), "data")
 
@@ -141,4 +142,36 @@ export async function getTableData(tableName: string) {
   } catch {
     return []
   }
+}
+
+export const db = {
+  query: executeQuery,
+  transaction: executeTransaction,
+  getTable: getTableData,
+
+  // Convenience methods for common operations
+  async select(tableName: string, conditions?: any) {
+    return await executeQuery(`SELECT * FROM ${tableName}`, [])
+  },
+
+  async insert(tableName: string, data: Record<string, any>) {
+    const fields = Object.keys(data).join(", ")
+    const placeholders = Object.keys(data)
+      .map(() => "?")
+      .join(", ")
+    const values = Object.values(data)
+    return await executeQuery(`INSERT INTO ${tableName} (${fields}) VALUES (${placeholders})`, values)
+  },
+
+  async update(tableName: string, data: Record<string, any>, conditions?: any) {
+    const setClause = Object.keys(data)
+      .map((key) => `${key} = ?`)
+      .join(", ")
+    const values = Object.values(data)
+    return await executeQuery(`UPDATE ${tableName} SET ${setClause}`, values)
+  },
+
+  async delete(tableName: string, conditions?: any) {
+    return await executeQuery(`DELETE FROM ${tableName}`, [])
+  },
 }

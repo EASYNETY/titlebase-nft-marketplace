@@ -8,14 +8,16 @@ const router = express.Router();
 // Properties routes
 router.get('/', async (req, res) => {
   try {
-    const { page = '1', limit = '20', category, minPrice, maxPrice, location, status = 'active' } = req.query;
+    const { page = '1', limit = '20', category, minPrice, maxPrice, location, status = 'verified' } = req.query;
 
     const pageNum = Number.parseInt(page as string);
     const limitNum = Number.parseInt(limit as string);
 
     let sqlQuery = `
-      SELECT p.*, u.username as owner_username, u.wallet_address as owner_address
+      SELECT p.*, p.is_featured, l.listing_type, l.price as listing_price, l.end_time,
+             u.username as owner_username, u.wallet_address as owner_address
       FROM properties p
+      LEFT JOIN listings l ON p.id = l.property_id AND l.status = 'active'
       LEFT JOIN users u ON p.owner_id = u.id
       WHERE 1=1
     `;
@@ -32,6 +34,10 @@ router.get('/', async (req, res) => {
     if (location) {
       sqlQuery += " AND p.address LIKE ?";
       params.push(`%${location}%`);
+    }
+    if (req.query.featured) {
+      sqlQuery += " AND p.is_featured = ?";
+      params.push(1);
     }
 
     sqlQuery += " ORDER BY p.created_at DESC LIMIT ? OFFSET ?";
@@ -55,6 +61,10 @@ router.get('/', async (req, res) => {
       countQuery += " AND p.address LIKE ?";
       countParams.push(`%${location}%`);
     }
+    if (req.query.featured) {
+      countQuery += " AND p.is_featured = ?";
+      countParams.push(1);
+    }
 
     const countResult = await query(countQuery, countParams);
     const total = countResult[0]?.total || 0;
@@ -65,6 +75,7 @@ router.get('/', async (req, res) => {
         images: p.images ? JSON.parse(p.images) : [],
         documents: p.documents ? JSON.parse(p.documents) : [],
         verification_documents: p.verification_documents ? JSON.parse(p.verification_documents) : [],
+        listing_price: p.listing_price ? Number(p.listing_price).toFixed(2) : null,
       })),
       pagination: {
         page: pageNum,
@@ -186,9 +197,14 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    // Check if property exists and user owns it
-    const propertyResult = await query("SELECT * FROM properties WHERE id = ? AND owner_id = ?", [id, req.user.id]);
-
+    // Check if property exists (for admins) or exists and user owns it
+    let propertyResult;
+    if (req.user.role === 'admin') {
+      propertyResult = await query("SELECT * FROM properties WHERE id = ?", [id]);
+    } else {
+      propertyResult = await query("SELECT * FROM properties WHERE id = ? AND owner_id = ?", [id, req.user.id]);
+    }
+ 
     if (propertyResult.length === 0) {
       return res.status(404).json({ error: 'Property not found or unauthorized' });
     }
@@ -212,7 +228,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res) => {
     await query(`UPDATE properties SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, values);
 
     // Fetch updated property
-    const updatedResult = await query("SELECT * FROM properties WHERE id = ?", [id]);
+    const updatedResult = await query("SELECT p.*, l.listing_type, l.price as listing_price, l.end_time FROM properties p LEFT JOIN listings l ON p.id = l.property_id AND l.status = 'active' WHERE p.id = ?", [id]);
     const property = updatedResult[0];
 
     res.json({

@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
+import { useTheme } from "next-themes"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Bell } from "lucide-react"
+import { Search, Bell, Sun, Moon } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { UserMenu } from "@/components/auth/user-menu"
 import { LoginModal } from "@/components/auth/login-modal"

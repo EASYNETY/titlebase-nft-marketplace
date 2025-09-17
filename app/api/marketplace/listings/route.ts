@@ -1,40 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyJWT } from "@/lib/auth/jwt"
+
+// Forward marketplace listing requests to the backend
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const queryString = searchParams.toString()
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
+    const response = await fetch(`${backendUrl}/api/marketplace/listings${queryString ? `?${queryString}` : ''}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': request.headers.get('authorization') || '',
+      },
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status })
+    }
+
+    return NextResponse.json(data)
+  } catch (error) {
+    console.error("Get listings error:", error)
+    return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 })
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.headers.get("authorization")?.replace("Bearer ", "")
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const user = await verifyJWT(token)
-    if (!user) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
-
     const body = await request.json()
-    const { tokenId, price, duration, listingType } = body
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-    // Validate listing data
-    if (!tokenId || !price || !listingType) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    const response = await fetch(`${backendUrl}/api/marketplace/listings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': request.headers.get('authorization') || '',
+      },
+      body: JSON.stringify(body),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status })
     }
 
-    // Create marketplace listing (mock implementation)
-    const listing = {
-      id: Date.now().toString(),
-      tokenId,
-      price,
-      duration,
-      listingType,
-      seller: user.address,
-      status: "active",
-      createdAt: new Date().toISOString(),
-      expiresAt: duration ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString() : null,
-    }
-
-    return NextResponse.json({ listing }, { status: 201 })
+    return NextResponse.json(data, { status: 201 })
   } catch (error) {
     console.error("Create listing error:", error)
     return NextResponse.json({ error: "Failed to create listing" }, { status: 500 })

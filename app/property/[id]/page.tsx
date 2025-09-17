@@ -1,7 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
+import { useAuth } from "@/lib/hooks/use-auth"
+import { useToast } from "@/components/ui/use-toast"
+import { marketplaceApi } from "@/lib/api/client"
+import { propertiesApi } from "@/lib/api/client"
+import { paymentsApi } from "@/lib/api/client"
 import Image from "next/image"
 import { Header } from "@/components/layout/header"
 import { MobileNav } from "@/components/layout/mobile-nav"
@@ -10,92 +15,215 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
+import { BidModal } from "@/components/marketplace/bid-modal"
+import { PaymentModal } from "@/components/payments/payment-modal"
+import { MapPin, Clock, Verified, TrendingUp, FileText, Shield, Heart, Share, Loader2 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
-import {
-  MapPin,
-  Verified,
-  TrendingUp,
-  FileText,
-  Shield,
-  Heart,
-  Share,
-  Users,
-  DollarSign,
-  Calculator,
-  PieChart,
-} from "lucide-react"
 
-const propertyData = {
-  id: "1",
-  title: "Modern Downtown Condo",
-  location: "San Francisco, CA",
-  fullAddress: "123 Market Street, San Francisco, CA 94105",
-  totalValue: 850000,
-  totalShares: 1000,
-  availableShares: 650,
-  sharePrice: 850,
-  minInvestment: 1000,
-  maxInvestment: 50000,
-  monthlyRevenue: 4250,
-  annualYield: 6.2,
-  images: [
-    "/modern-downtown-condo-exterior.png",
-    "/modern-condo-living-room.png",
-    "/modern-condo-kitchen.png",
-    "/modern-condo-bedroom.png",
-  ],
-  isVerified: true,
-  currentInvestors: 23,
-  description:
-    "Stunning modern condominium in the heart of downtown San Francisco. This property features floor-to-ceiling windows, premium finishes, and breathtaking city views. Located in a luxury building with concierge services and rooftop amenities.",
-  details: {
-    bedrooms: 2,
-    bathrooms: 2,
-    sqft: 1200,
-    yearBuilt: 2018,
-    propertyType: "Condominium",
-    lotSize: "N/A",
-  },
-  titleInfo: {
-    propertyId: "SF-2024-001",
-    legalDescription: "Unit 1205, Building A, Market Square Condominiums",
-    jurisdiction: "San Francisco County, California",
-    documentHash: "0x1234...5678",
-    verifiedBy: "SF County Recorder",
-    verificationDate: "2024-01-15",
-  },
-  revenueHistory: [
-    { month: "Jan 2024", revenue: 4100, yield: 5.8 },
-    { month: "Feb 2024", revenue: 4250, yield: 6.1 },
-    { month: "Mar 2024", revenue: 4300, yield: 6.2 },
-  ],
-  topInvestors: [
-    { address: "0x1234...5678", shares: 85, percentage: 8.5 },
-    { address: "0x2345...6789", shares: 72, percentage: 7.2 },
-    { address: "0x3456...7890", shares: 68, percentage: 6.8 },
-  ],
+interface Property {
+  id: string
+  title: string
+  description: string
+  address: string
+  property_type: string
+  square_footage?: number
+  bedrooms?: number
+  bathrooms?: number
+  year_built?: number
+  lot_size?: number
+  images: string[]
+  verification_status: string
+}
+
+interface Listing {
+  id: string
+  property_id: string
+  listing_type: 'fixed_price' | 'auction'
+  price: string
+  currency: string
+  start_time: string
+  end_time?: string
+  status: string
+  current_bid?: string
+  seller_username: string
+  seller_address: string
 }
 
 export default function PropertyDetailPage() {
   const params = useParams()
+  const router = useRouter()
+  const { isAuthenticated } = useAuth()
+  const { toast } = useToast()
+  const [property, setProperty] = useState<Property | null>(null)
+  const [listing, setListing] = useState<Listing | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState(0)
-  const [investmentAmount, setInvestmentAmount] = useState("")
-  const [calculatedShares, setCalculatedShares] = useState(0)
+  const [bidAmount, setBidAmount] = useState("")
   const [isFavorited, setIsFavorited] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showBidModal, setShowBidModal] = useState(false)
+  const [bidding, setBidding] = useState(false)
+  const [buying, setBuying] = useState(false)
+  const [payment, setPayment] = useState<any>(null)
 
+  // Fetch property data
   useEffect(() => {
-    const amount = Number.parseFloat(investmentAmount) || 0
-    const shares = Math.floor(amount / propertyData.sharePrice)
-    setCalculatedShares(shares)
-  }, [investmentAmount])
+    const propertyId = params.id as string
+    if (!propertyId) {
+      router.push('/marketplace')
+      return
+    }
 
-  const handleInvest = () => {
-    // Implement investment logic
-    console.log("Invest:", investmentAmount, "shares:", calculatedShares)
+    const fetchProperty = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Fetch property first
+        const propertyData = await propertiesApi.getProperty(propertyId) as any
+        const fetchedProperty = propertyData.property
+        setProperty(fetchedProperty)
+
+        // Fetch active listing for the property
+        const listingData = await marketplaceApi.getListings({ propertyId, status: 'active' }) as any
+        if (listingData.listings && listingData.listings.length > 0) {
+          const fetchedListing = listingData.listings[0]
+          setListing(fetchedListing)
+
+          // Combine data
+          const combinedProperty = {
+            ...fetchedProperty,
+            assessed_value: fetchedListing.assessed_value,
+            title: fetchedListing.property_title,
+            description: fetchedListing.property_description,
+            images: fetchedListing.property_images,
+            price: fetchedListing.price,
+            seller: fetchedListing.seller_username,
+            currentBid: fetchedListing.current_bid,
+            isAuction: fetchedListing.listing_type === 'auction',
+            auctionEndTime: fetchedListing.end_time,
+            isVerified: fetchedProperty.verification_status === 'verified',
+          }
+          setProperty(combinedProperty)
+        } else {
+          // No active listing, use property data as is
+          setProperty({
+            ...fetchedProperty,
+            isVerified: fetchedProperty.verification_status === 'verified',
+          })
+        }
+
+      } catch (err) {
+        console.error('Error fetching property:', err)
+        toast({
+          title: 'Error',
+          description: 'Property not found',
+          variant: 'destructive',
+        })
+        router.push('/marketplace')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProperty()
+  }, [params.id, router, toast])
+
+  const handleBuyNow = async () => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please sign in to purchase',
+        variant: 'destructive',
+      })
+      router.push('/login')
+      return
+    }
+
+    if (!listing || listing.listing_type !== 'fixed_price') {
+      toast({
+        title: 'Invalid Listing',
+        description: 'This property is not available for direct purchase',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setShowPaymentModal(true)
   }
 
-  const fundingProgress = ((propertyData.totalShares - propertyData.availableShares) / propertyData.totalShares) * 100
+  const handlePlaceBid = () => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please sign in to place a bid',
+        variant: 'destructive',
+      })
+      router.push('/login')
+      return
+    }
+    if (!listing || listing.listing_type !== 'auction') {
+      toast({
+        title: 'Invalid Listing',
+        description: 'This property is not available for bidding',
+        variant: 'destructive',
+      })
+      return
+    }
+    setShowBidModal(true)
+  }
+
+  const handlePaymentComplete = (paymentResult: any) => {
+    setShowPaymentModal(false)
+    const params = new URLSearchParams({
+      id: paymentResult.id || 'N/A',
+      propertyTitle: property.title,
+      amount: paymentResult.amount || listing.price,
+      fractions: paymentResult.fractions?.toString() || '100',
+      totalFractions: '1000',
+      seller: listing.seller_username,
+    })
+    router.push(`/receipt?${params.toString()}`)
+    // TODO: Mint fractional tokens
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background pb-20">
+        <Header />
+        <main className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span>Loading property details...</span>
+            </div>
+          </div>
+        </main>
+        <MobileNav />
+      </div>
+    )
+  }
+
+  if (error || !property || !listing) {
+    return (
+      <div className="min-h-screen bg-background pb-20">
+        <Header />
+        <main className="container mx-auto px-4 py-6">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold mb-2">Property Not Found</h2>
+            <p className="text-muted-foreground mb-4">
+              {error || 'The property you are looking for does not exist or has been removed.'}
+            </p>
+            <Button onClick={() => router.push('/marketplace')}>
+              Go Back to Marketplace
+            </Button>
+          </div>
+        </main>
+        <MobileNav />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -106,8 +234,8 @@ export default function PropertyDetailPage() {
         <div className="space-y-4">
           <div className="relative">
             <Image
-              src={propertyData.images[selectedImage] || "/placeholder.svg"}
-              alt={propertyData.title}
+              src={property.images?.[selectedImage] || "/placeholder.svg"}
+              alt={property.title}
               width={800}
               height={400}
               className="w-full h-64 md:h-96 object-cover rounded-lg"
@@ -124,7 +252,7 @@ export default function PropertyDetailPage() {
             </div>
 
             {/* Verification badge */}
-            {propertyData.isVerified && (
+            {property.isVerified && (
               <Badge className="absolute top-4 left-4 bg-green-500 hover:bg-green-600">
                 <Verified className="w-3 h-3 mr-1" />
                 Verified Title
@@ -133,186 +261,101 @@ export default function PropertyDetailPage() {
           </div>
 
           {/* Thumbnail gallery */}
-          <div className="flex gap-2 overflow-x-auto">
-            {propertyData.images.map((image, index) => (
-              <button
-                key={index}
-                onClick={() => setSelectedImage(index)}
-                className={`shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 ${
-                  selectedImage === index ? "border-primary" : "border-transparent"
-                }`}
-              >
-                <Image
-                  src={image || "/placeholder.svg"}
-                  alt={`View ${index + 1}`}
-                  width={80}
-                  height={80}
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            ))}
-          </div>
+          {property.images.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto">
+              {property.images.map((image, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedImage(index)}
+                  className={`shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 ${
+                    selectedImage === index ? "border-primary" : "border-transparent"
+                  }`}
+                >
+                  <Image
+                    src={image || "/placeholder.svg"}
+                    alt={`View ${index + 1}`}
+                    width={80}
+                    height={80}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Property Header */}
         <div className="space-y-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">{propertyData.title}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">{property.title}</h1>
             <div className="flex items-center gap-2 text-muted-foreground">
               <MapPin className="w-4 h-4" />
-              <span>{propertyData.location}</span>
+              <span>{property.location}</span>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Investment Overview
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Property Value</span>
-                    <span className="font-bold">${propertyData.totalValue.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Price per Share</span>
-                    <span className="font-bold">${propertyData.sharePrice}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Available Shares</span>
-                    <span className="font-bold">{propertyData.availableShares.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Current Investors</span>
-                    <span className="font-bold">{propertyData.currentInvestors}</span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Funding Progress</span>
-                    <span className="text-sm text-muted-foreground">{fundingProgress.toFixed(1)}%</span>
-                  </div>
-                  <Progress value={fundingProgress} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Revenue & Returns
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Monthly Revenue</span>
-                    <span className="font-bold text-green-600">${propertyData.monthlyRevenue.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Annual Yield</span>
-                    <span className="font-bold text-green-600">{propertyData.annualYield}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Min Investment</span>
-                    <span className="font-medium">${propertyData.minInvestment.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Max Investment</span>
-                    <span className="font-medium">${propertyData.maxInvestment.toLocaleString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calculator className="w-5 h-5" />
-                Investment Calculator
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Investment Amount ($)</label>
-                  <Input
-                    type="number"
-                    placeholder="Enter amount"
-                    value={investmentAmount}
-                    onChange={(e) => setInvestmentAmount(e.target.value)}
-                    min={propertyData.minInvestment}
-                    max={propertyData.maxInvestment}
-                  />
-                  <div className="text-xs text-muted-foreground">
-                    Min: ${propertyData.minInvestment.toLocaleString()} • Max: $
-                    {propertyData.maxInvestment.toLocaleString()}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Shares to Purchase</label>
-                  <div className="h-10 px-3 py-2 border rounded-md bg-muted flex items-center">
-                    <span className="font-medium">{calculatedShares.toLocaleString()}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {calculatedShares > 0 &&
-                      `${((calculatedShares / propertyData.totalShares) * 100).toFixed(2)}% ownership`}
-                  </div>
-                </div>
-              </div>
-
-              {calculatedShares > 0 && (
-                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg space-y-2">
-                  <h4 className="font-medium">Projected Monthly Returns</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Monthly Income:</span>
-                      <div className="font-bold text-green-600">
-                        ${((propertyData.monthlyRevenue * calculatedShares) / propertyData.totalShares).toFixed(2)}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Annual Income:</span>
-                      <div className="font-bold text-green-600">
-                        ${((propertyData.monthlyRevenue * 12 * calculatedShares) / propertyData.totalShares).toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          {/* Price and Action */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-3xl font-bold text-primary">{listing.price} ETH</div>
+              <div className="text-sm text-muted-foreground">Assessed Value: ${property.assessed_value ? property.assessed_value.toLocaleString() : 'N/A'}</div>
+              {listing.listing_type === 'auction' && listing.current_bid && (
+                <div className="text-sm text-muted-foreground">Current Bid: {listing.current_bid} ETH</div>
               )}
+            </div>
 
-              <Button
-                onClick={handleInvest}
-                size="lg"
-                className="w-full"
-                disabled={!calculatedShares || calculatedShares > propertyData.availableShares}
-              >
-                {calculatedShares > propertyData.availableShares
-                  ? "Not Enough Shares Available"
-                  : `Invest $${investmentAmount || "0"}`}
-              </Button>
-            </CardContent>
-          </Card>
+            <div className="flex gap-3">
+              {property.isAuction ? (
+                <div className="flex gap-2 w-full md:w-auto">
+                  <Input
+                    placeholder="Enter bid amount (ETH)"
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handlePlaceBid} 
+                    className="shrink-0"
+                    disabled={bidding || !bidAmount}
+                  >
+                    {bidding ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Placing...
+                      </>
+                    ) : (
+                      'Place Bid'
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Button 
+                  onClick={handleBuyNow} 
+                  size="lg" 
+                  className="w-full md:w-auto"
+                  disabled={buying}
+                >
+                  {buying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    'Buy Now'
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Property Details Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="investors">Investors</TabsTrigger>
-            <TabsTrigger value="revenue">Revenue</TabsTrigger>
-            <TabsTrigger value="title">Title Info</TabsTrigger>
             <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="title">Title Info</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -321,7 +364,7 @@ export default function PropertyDetailPage() {
                 <CardTitle>Property Description</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground leading-relaxed">{propertyData.description}</p>
+                <p className="text-muted-foreground leading-relaxed">{listing.property_description}</p>
               </CardContent>
             </Card>
 
@@ -336,19 +379,19 @@ export default function PropertyDetailPage() {
                 <CardContent className="space-y-2">
                   <div className="flex justify-between">
                     <span>Bedrooms</span>
-                    <span className="font-medium">{propertyData.details.bedrooms}</span>
+                    <span className="font-medium">{property.bedrooms || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Bathrooms</span>
-                    <span className="font-medium">{propertyData.details.bathrooms}</span>
+                    <span className="font-medium">{property.bathrooms || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Square Feet</span>
-                    <span className="font-medium">{propertyData.details.sqft.toLocaleString()}</span>
+                    <span className="font-medium">{property.square_footage?.toLocaleString() || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Year Built</span>
-                    <span className="font-medium">{propertyData.details.yearBuilt}</span>
+                    <span className="font-medium">{property.year_built || 'N/A'}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -378,136 +421,7 @@ export default function PropertyDetailPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="investors" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Current Investors
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-3 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold">{propertyData.currentInvestors}</div>
-                    <div className="text-sm text-muted-foreground">Total Investors</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold">{propertyData.totalShares - propertyData.availableShares}</div>
-                    <div className="text-sm text-muted-foreground">Shares Sold</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold">{fundingProgress.toFixed(1)}%</div>
-                    <div className="text-sm text-muted-foreground">Funded</div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h4 className="font-medium">Top Investors</h4>
-                  {propertyData.topInvestors.map((investor, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium">#{index + 1}</span>
-                        </div>
-                        <div>
-                          <div className="font-mono text-sm">{investor.address}</div>
-                          <div className="text-xs text-muted-foreground">{investor.percentage}% ownership</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">{investor.shares} shares</div>
-                        <div className="text-xs text-muted-foreground">
-                          ${(investor.shares * propertyData.sharePrice).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="revenue" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <PieChart className="w-5 h-5" />
-                  Revenue History
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      ${propertyData.monthlyRevenue.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Current Monthly Revenue</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">{propertyData.annualYield}%</div>
-                    <div className="text-sm text-muted-foreground">Annual Yield</div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h4 className="font-medium">Recent Performance</h4>
-                  {propertyData.revenueHistory.map((entry, index) => (
-                    <div key={index} className="flex justify-between items-center py-3 border-b last:border-b-0">
-                      <span className="font-medium">{entry.month}</span>
-                      <div className="text-right">
-                        <div className="font-medium">${entry.revenue.toLocaleString()}</div>
-                        <div className="text-sm text-green-600">{entry.yield}% yield</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="title" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Title Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-sm text-muted-foreground">Property ID</span>
-                    <p className="font-mono text-sm">{propertyData.titleInfo.propertyId}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Legal Description</span>
-                    <p className="text-sm">{propertyData.titleInfo.legalDescription}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Jurisdiction</span>
-                    <p className="text-sm">{propertyData.titleInfo.jurisdiction}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Document Hash</span>
-                    <p className="font-mono text-sm break-all">{propertyData.titleInfo.documentHash}</p>
-                  </div>
-                  <div className="flex justify-between">
-                    <div>
-                      <span className="text-sm text-muted-foreground">Verified By</span>
-                      <p className="text-sm">{propertyData.titleInfo.verifiedBy}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-muted-foreground">Verification Date</span>
-                      <p className="text-sm">{propertyData.titleInfo.verificationDate}</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="details" className="space-y-4">
+          <TabsContent value="details">
             <Card>
               <CardHeader>
                 <CardTitle>Property Details</CardTitle>
@@ -517,41 +431,141 @@ export default function PropertyDetailPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Property Type</span>
-                      <span className="font-medium">{propertyData.details.propertyType}</span>
+                      <span className="font-medium">{property.property_type}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Bedrooms</span>
-                      <span className="font-medium">{propertyData.details.bedrooms}</span>
+                      <span className="font-medium">{property.bedrooms || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Bathrooms</span>
-                      <span className="font-medium">{propertyData.details.bathrooms}</span>
+                      <span className="font-medium">{property.bathrooms || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Square Feet</span>
-                      <span className="font-medium">{propertyData.details.sqft.toLocaleString()}</span>
+                      <span className="font-medium">{property.square_footage?.toLocaleString() || 'N/A'}</span>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Year Built</span>
-                      <span className="font-medium">{propertyData.details.yearBuilt}</span>
+                      <span className="font-medium">{property.year_built || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Lot Size</span>
-                      <span className="font-medium">{propertyData.details.lotSize}</span>
+                      <span className="font-medium">{property.lot_size || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Full Address</span>
-                      <span className="font-medium text-right">{propertyData.fullAddress}</span>
+                      <span className="font-medium text-right">{property.address}</span>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="title">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Title Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {property.titleInfo ? (
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-sm text-muted-foreground">Property ID</span>
+                      <p className="font-mono text-sm">{property.titleInfo.propertyId}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Legal Description</span>
+                      <p className="text-sm">{property.titleInfo.legalDescription}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Jurisdiction</span>
+                      <p className="text-sm">{property.titleInfo.jurisdiction}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Document Hash</span>
+                      <p className="font-mono text-sm break-all">{property.titleInfo.documentHash}</p>
+                    </div>
+                    <div className="flex justify-between">
+                      <div>
+                        <span className="text-sm text-muted-foreground">Verified By</span>
+                        <p className="text-sm">{property.titleInfo.verifiedBy}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">Verification Date</span>
+                        <p className="text-sm">{property.titleInfo.verificationDate}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Title information not available</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="history">
+            <Card>
+              <CardHeader>
+                <CardTitle>Price History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {property.priceHistory && property.priceHistory.length > 0 ? (
+                  <div className="space-y-3">
+                    {property.priceHistory.map((entry, index) => (
+                      <div key={index} className="flex justify-between items-center py-2 border-b last:border-b-0">
+                        <span className="text-sm text-muted-foreground">{entry.date}</span>
+                        <span className="font-medium">{entry.price}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No price history available</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
+
+      {/* Payment Modal */}
+      {showBidModal && listing && (
+        <BidModal
+          isOpen={showBidModal}
+          onClose={() => setShowBidModal(false)}
+          onSuccess={() => fetchProperty()}
+          property={{
+            id: listing.id,
+            title: property.title,
+            currentBid: listing.current_bid,
+            reservePrice: listing.price,
+            auctionEndTime: listing.end_time,
+            minBidIncrement: 0.05,
+          }}
+        />
+      )}
+
+      {showPaymentModal && listing && property && (
+        <PaymentModal
+          open={showPaymentModal}
+          onOpenChange={setShowPaymentModal}
+          property={{
+            id: listing.id,
+            title: property.title,
+            price: listing.price,
+            seller: listing.seller_username,
+            image: property.images?.[0] || '/placeholder.jpg',
+            assessed_value: property.assessed_value || 0,
+          }}
+          onPaymentComplete={handlePaymentComplete}
+        />
+      )}
 
       <MobileNav />
     </div>

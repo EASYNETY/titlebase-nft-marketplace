@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import jwt from "jsonwebtoken"
 
+// Forward session requests to the backend
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
@@ -11,25 +11,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any
+    // Forward to backend API
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+    const response = await fetch(`${backendUrl}/api/auth/session`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
 
-    // Fetch user data from database
-    // This is a placeholder - implement your database logic
-    const userData = {
-      id: decoded.userId,
-      address: decoded.address,
-      email: decoded.email,
-      name: decoded.name,
-      avatar: decoded.avatar,
-      provider: decoded.provider,
-      socialProvider: decoded.socialProvider,
-      isKYCVerified: decoded.isKYCVerified || false,
-      isWhitelisted: decoded.isWhitelisted || false,
-      smartAccountAddress: decoded.smartAccountAddress,
+    const data = await response.json()
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status })
     }
 
-    return NextResponse.json(userData)
+    return NextResponse.json(data)
   } catch (error) {
+    console.error("Session API error:", error)
     return NextResponse.json({ error: "Invalid session" }, { status: 401 })
   }
 }

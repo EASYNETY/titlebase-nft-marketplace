@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -36,6 +37,7 @@ export function PropertyCard({
   currentBid,
   className,
 }: PropertyCardProps) {
+  const router = useRouter()
   const [isFavorited, setIsFavorited] = useState(false)
 
   const formatTimeRemaining = (endTime: string) => {
@@ -56,8 +58,29 @@ export function PropertyCard({
     return `${hours}h ${minutes}m`
   }
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on interactive elements
+    if (
+      e.target instanceof Element && 
+      (e.target.closest('button') || e.target.closest('a'))
+    ) {
+      return
+    }
+    
+    router.push(`/property/${id}`)
+  }
+
+  const handleActionClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    router.push(`/property/${id}`)
+  }
+
   return (
-    <Card className={cn("overflow-hidden hover:shadow-lg transition-shadow", className)}>
+    <Card 
+      className={cn("overflow-hidden hover:shadow-lg transition-shadow cursor-pointer", className)}
+      onClick={handleCardClick}
+    >
       <div className="relative">
         <Image
           src={image || "/placeholder.svg"}
@@ -65,6 +88,10 @@ export function PropertyCard({
           width={400}
           height={240}
           className="w-full h-48 object-cover"
+          onError={(e) => {
+            const img = e.target as HTMLImageElement
+            img.src = "/placeholder.svg"
+          }}
         />
 
         {/* Overlay badges */}
@@ -90,6 +117,7 @@ export function PropertyCard({
           className="absolute top-3 right-3 bg-white/80 hover:bg-white"
           onClick={(e) => {
             e.preventDefault()
+            e.stopPropagation()
             setIsFavorited(!isFavorited)
           }}
         >
@@ -130,11 +158,13 @@ export function PropertyCard({
           </div>
 
           {/* Action Button */}
-          <Link href={`/property/${id}`} className="block">
-            <Button className="w-full" variant={isAuction ? "destructive" : "default"}>
-              {isAuction ? "Place Bid" : "Buy Now"}
-            </Button>
-          </Link>
+          <Button 
+            className="w-full" 
+            variant={isAuction ? "destructive" : "default"}
+            onClick={handleActionClick}
+          >
+            {isAuction ? "Place Bid" : "Buy Now"}
+          </Button>
         </div>
       </CardContent>
     </Card>

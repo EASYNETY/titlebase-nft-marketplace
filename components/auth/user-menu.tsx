@@ -81,14 +81,14 @@ export function UserMenu() {
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem onClick={() => (window.location.href = "/profile")}>Profile Settings</DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => (window.location.href = "/portfolio")}>My Portfolio</DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => (window.location.href = "/transactions")}>
-            Transaction History
-          </DropdownMenuItem>
-
+          <DropdownMenuItem onClick={() => (window.location.href = "/marketplace")}>Marketplace</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => (window.location.href = "/portfolio")}>Portfolio</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => (window.location.href = "/transactions")}>Transactions</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => (window.location.href = "/billing")}>Billing</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => (window.location.href = "/support")}>Support</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => (window.location.href = "/user/settings")}>Settings</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => (window.location.href = "/profile")}>Profile</DropdownMenuItem>
           <DropdownMenuSeparator />
 
           {!user.isKYCVerified && (

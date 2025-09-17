@@ -15,7 +15,7 @@ router.get('/listings', async (req, res) => {
 
     let sqlQuery = `
       SELECT l.*, p.title as property_title, p.description as property_description,
-             p.images as property_images, u.username as seller_username,
+             p.images as property_images, p.assessed_value, u.username as seller_username,
              u.wallet_address as seller_address
       FROM listings l
       LEFT JOIN properties p ON l.property_id = p.id
@@ -58,6 +58,7 @@ router.get('/listings', async (req, res) => {
       listings: listings.map((l: any) => ({
         ...l,
         property_images: l.property_images ? JSON.parse(l.property_images) : [],
+        price: Number(l.price).toFixed(2),
       })),
       pagination: {
         page: pageNum,
@@ -123,7 +124,7 @@ router.post('/listings', authenticateToken, async (req: AuthRequest, res) => {
     // Fetch the created listing with property details
     const listingResult = await query(`
       SELECT l.*, p.title as property_title, p.description as property_description,
-             p.images as property_images, u.username as seller_username,
+             p.images as property_images, p.assessed_value, u.username as seller_username,
              u.wallet_address as seller_address
       FROM listings l
       LEFT JOIN properties p ON l.property_id = p.id
@@ -151,7 +152,7 @@ router.get('/listings/:id', async (req, res) => {
 
     const listingResult = await query(`
       SELECT l.*, p.title as property_title, p.description as property_description,
-             p.images as property_images, p.address as property_address,
+             p.images as property_images, p.address as property_address, p.assessed_value,
              u.username as seller_username, u.wallet_address as seller_address
       FROM listings l
       LEFT JOIN properties p ON l.property_id = p.id
@@ -169,6 +170,7 @@ router.get('/listings/:id', async (req, res) => {
       listing: {
         ...listing,
         property_images: listing.property_images ? JSON.parse(listing.property_images) : [],
+        price: Number(listing.price).toFixed(2),
       },
     });
   } catch (error) {
@@ -225,6 +227,7 @@ router.put('/listings/:id', authenticateToken, async (req: AuthRequest, res) => 
       listing: {
         ...listing,
         property_images: listing.property_images ? JSON.parse(listing.property_images) : [],
+        price: Number(listing.price).toFixed(2),
       },
     });
   } catch (error) {

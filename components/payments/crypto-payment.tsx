@@ -5,14 +5,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import { Loader2, Wallet, CheckCircle, AlertCircle } from "lucide-react"
 import { SUPPORTED_TOKENS } from "@/lib/config/payments"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { WalletSelection } from "./wallet-selection"
 
 interface CryptoPaymentProps {
   amount: string
   recipient: string
   propertyId: string
+  fractions: number
+  totalFractions: number
   escrowEnabled: boolean
   escrowPeriod: number
   onPaymentComplete: (result: any) => void
@@ -28,11 +32,31 @@ export function CryptoPayment({
 }: CryptoPaymentProps) {
   const { user, isConnected } = useAuth()
   const [selectedToken, setSelectedToken] = useState("USDC")
+  const [selectedWallet, setSelectedWallet] = useState<string>("")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
+  const [showWalletSelection, setShowWalletSelection] = useState(!isConnected)
+
+  const handleWalletSelect = async (walletId: string) => {
+    setSelectedWallet(walletId)
+    setIsConnecting(true)
+
+    try {
+      // Simulate wallet connection
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      setShowWalletSelection(false)
+      console.log("[v0] Connected to wallet:", walletId)
+    } catch (error) {
+      console.error("[v0] Wallet connection failed:", error)
+    } finally {
+      setIsConnecting(false)
+    }
+  }
 
   const handlePayment = async () => {
-    if (!isConnected || !user) {
+    if (!isConnected && !selectedWallet) {
+      setShowWalletSelection(true)
       return
     }
 
@@ -50,6 +74,7 @@ export function CryptoPayment({
         escrowId: escrowEnabled ? `escrow_${Date.now()}` : undefined,
         token: selectedToken,
         amount,
+        wallet: selectedWallet,
       }
 
       setPaymentStatus("success")
@@ -62,19 +87,24 @@ export function CryptoPayment({
     }
   }
 
-  if (!isConnected) {
+  if (showWalletSelection) {
     return (
-      <Card className="border-yellow-200 bg-yellow-50">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3">
-            <Wallet className="h-5 w-5 text-yellow-600" />
-            <div>
-              <p className="font-medium text-yellow-900">Wallet Not Connected</p>
-              <p className="text-sm text-yellow-700">Please connect your wallet to make a crypto payment.</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <div className="text-center space-y-2">
+          <h3 className="font-medium">Connect Your Wallet</h3>
+          <p className="text-sm text-muted-foreground">Choose your preferred wallet to complete the crypto payment</p>
+        </div>
+
+        <WalletSelection
+          onWalletSelect={handleWalletSelect}
+          isConnecting={isConnecting}
+          selectedWallet={selectedWallet}
+        />
+
+        <Button variant="outline" onClick={() => setShowWalletSelection(false)} className="w-full bg-transparent">
+          Back to Payment Options
+        </Button>
+      </div>
     )
   }
 
@@ -126,6 +156,30 @@ export function CryptoPayment({
 
   return (
     <div className="space-y-4">
+      {/* Connected Wallet Info */}
+      {(isConnected || selectedWallet) && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-900">
+                  Wallet Connected: {selectedWallet || "MetaMask"}
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowWalletSelection(true)}
+                className="bg-transparent"
+              >
+                Change Wallet
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Token Selection */}
       <div className="space-y-2">
         <label className="text-sm font-medium">Select Payment Token</label>
@@ -137,9 +191,18 @@ export function CryptoPayment({
             {Object.entries(SUPPORTED_TOKENS).map(([key, token]) => (
               <SelectItem key={key} value={key}>
                 <div className="flex items-center gap-2">
-                  <img src={token.icon || "/placeholder.svg"} alt={token.symbol} className="h-5 w-5" />
+                  <span className="text-lg">
+                    {token.symbol === "ETH"
+                      ? "⚡"
+                      : token.symbol === "USDC"
+                        ? "🔵"
+                        : token.symbol === "USDT"
+                          ? "🟢"
+                          : "💰"}
+                  </span>
                   <span>{token.symbol}</span>
                   <span className="text-muted-foreground">- {token.name}</span>
+                  {key === "USDC" && <Badge className="bg-blue-100 text-blue-800 text-xs">Recommended</Badge>}
                 </div>
               </SelectItem>
             ))}
@@ -160,6 +223,13 @@ export function CryptoPayment({
             </span>
           </div>
           <div className="flex justify-between">
+            <span>Network</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm">Base Network</span>
+              <Badge className="bg-blue-100 text-blue-800 text-xs">Low Fees</Badge>
+            </div>
+          </div>
+          <div className="flex justify-between">
             <span>Recipient</span>
             <span className="font-mono text-sm">
               {recipient.slice(0, 6)}...{recipient.slice(-4)}
@@ -171,6 +241,50 @@ export function CryptoPayment({
               <Badge className="bg-blue-100 text-blue-800">{escrowPeriod} days</Badge>
             </div>
           )}
+          <Separator />
+          <div className="flex justify-between">
+            <span>Estimated Gas Fee</span>
+            <span className="text-sm text-green-600">~$0.05</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Supported Networks */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Supported Networks</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-2 p-2 border rounded">
+              <span className="text-lg">🔵</span>
+              <div>
+                <div className="text-sm font-medium">Base</div>
+                <div className="text-xs text-muted-foreground">Low fees</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 border rounded opacity-50">
+              <span className="text-lg">⚡</span>
+              <div>
+                <div className="text-sm font-medium">Ethereum</div>
+                <div className="text-xs text-muted-foreground">Coming soon</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 border rounded opacity-50">
+              <span className="text-lg">🟣</span>
+              <div>
+                <div className="text-sm font-medium">Polygon</div>
+                <div className="text-xs text-muted-foreground">Coming soon</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 border rounded opacity-50">
+              <span className="text-lg">☀️</span>
+              <div>
+                <div className="text-sm font-medium">Solana</div>
+                <div className="text-xs text-muted-foreground">Coming soon</div>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -196,10 +310,11 @@ export function CryptoPayment({
 
       {/* Transaction Info */}
       <div className="text-xs text-muted-foreground space-y-1">
-        <p>• Transaction will be processed on Base network</p>
+        <p>• Transaction will be processed on Base network for low fees</p>
         <p>• Gas fees will be calculated automatically</p>
         <p>• You will receive a confirmation once the transaction is mined</p>
         {escrowEnabled && <p>• Funds will be held in escrow for {escrowPeriod} days for buyer protection</p>}
+        <p>• All transactions are secured by blockchain technology</p>
       </div>
     </div>
   )

@@ -1,128 +1,223 @@
-import { Suspense } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AnalyticsOverview } from "@/components/admin/analytics-overview"
-import { PropertyManagement } from "@/components/admin/property-management"
+"use client"
+
+import { useState, useEffect } from "react"
+import { useAuth } from "@/lib/hooks/use-auth"
+import { adminApi } from "@/lib/api/client"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { UserManagement } from "@/components/admin/user-management"
-import { TransactionMonitor } from "@/components/admin/transaction-monitor"
-import { RevenueTracking } from "@/components/admin/revenue-tracking"
-import { Shield, BarChart3, Users, Building, CreditCard, Activity } from "lucide-react"
+import { PropertyManagement } from "@/components/admin/property-management"
+import { AnalyticsOverview } from "@/components/admin/analytics-overview"
+import { PlatformSettings } from "@/components/super-admin/platform-settings"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Users,
+  Home,
+  BarChart3,
+  Settings,
+  Shield,
+  DollarSign,
+  FileText,
+  AlertTriangle,
+  CheckCircle,
+  XCircle
+} from "lucide-react"
 
 export default function AdminDashboard() {
+  const { user, logout } = useAuth()
+  const [activeTab, setActiveTab] = useState("overview")
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeProperties: 0,
+    totalVolume: "$0",
+    pendingReviews: 0
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoadingStats(true);
+        const response = await adminApi.getAnalytics();
+        setStats(response.stats);
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  if (!user) {
+    return <div>Loading...</div>
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white">
-            <Shield className="h-6 w-6" />
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-white shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-primary">Admin Dashboard</h1>
+              <Badge variant="destructive">{user.role}</Badge>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-muted-foreground">
+                Welcome, {user.name || user.address?.slice(0, 6) + '...' + user.address?.slice(-4)}
+              </span>
+              <Button variant="outline" onClick={logout}>
+                Logout
+              </Button>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
-            <p className="text-slate-600">Manage your title NFT marketplace</p>
-          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold mb-2">Platform Administration</h2>
+          <p className="text-muted-foreground">Manage users, properties, and platform operations</p>
         </div>
 
         {/* Quick Stats */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Properties</CardTitle>
-              <Building className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">1,234</div>
-              <p className="text-xs text-muted-foreground">+12% from last month</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">5,678</div>
+              <div className="text-2xl font-bold">{loadingStats ? '...' : stats.totalUsers.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">+12% from last month</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Properties</CardTitle>
+              <Home className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{loadingStats ? '...' : stats.activeProperties.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">+8% from last month</p>
             </CardContent>
           </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Volume</CardTitle>
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$12.5M</div>
-              <p className="text-xs text-muted-foreground">+23% from last month</p>
+              <div className="text-2xl font-bold">{loadingStats ? '...' : stats.totalVolume}</div>
+              <p className="text-xs text-muted-foreground">+15% from last month</p>
             </CardContent>
           </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Pending Reviews</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$125K</div>
-              <p className="text-xs text-muted-foreground">+18% from last month</p>
+              <div className="text-2xl font-bold">{loadingStats ? '...' : stats.pendingReviews}</div>
+              <p className="text-xs text-muted-foreground">Requires attention</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Main Content */}
-        <Tabs defaultValue="analytics" className="space-y-6">
+        {/* Main Dashboard Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="analytics" className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="properties" className="flex items-center gap-2">
-              <Building className="h-4 w-4" />
-              Properties
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Transactions
-            </TabsTrigger>
-            <TabsTrigger value="revenue" className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Revenue
-            </TabsTrigger>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="properties">Properties</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="analytics">
-            <Suspense fallback={<div>Loading analytics...</div>}>
-              <AnalyticsOverview />
-            </Suspense>
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Activity</CardTitle>
+                  <CardDescription>Latest platform activities and transactions</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">New property listed</p>
+                        <p className="text-xs text-muted-foreground">2 minutes ago</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <Users className="h-4 w-4 text-blue-500" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">New user registered</p>
+                        <p className="text-xs text-muted-foreground">5 minutes ago</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <DollarSign className="h-4 w-4 text-green-500" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Transaction completed</p>
+                        <p className="text-xs text-muted-foreground">10 minutes ago</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Quick Actions</CardTitle>
+                  <CardDescription>Administrative tasks and shortcuts</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button className="w-full justify-start" variant="outline" onClick={() => setActiveTab("users")}>
+                    <Users className="h-4 w-4 mr-2" />
+                    Manage Users
+                  </Button>
+                  <Button className="w-full justify-start" variant="outline" onClick={() => setActiveTab("properties")}>
+                    <Home className="h-4 w-4 mr-2" />
+                    Review Properties
+                  </Button>
+                  <Button className="w-full justify-start" variant="outline" onClick={() => setActiveTab("analytics")}>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    View Analytics
+                  </Button>
+                  <Button className="w-full justify-start" variant="outline" onClick={() => setActiveTab("settings")}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Platform Settings
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
-          <TabsContent value="properties">
-            <Suspense fallback={<div>Loading properties...</div>}>
-              <PropertyManagement />
-            </Suspense>
+          <TabsContent value="users" className="space-y-6">
+            <UserManagement />
           </TabsContent>
 
-          <TabsContent value="users">
-            <Suspense fallback={<div>Loading users...</div>}>
-              <UserManagement />
-            </Suspense>
+          <TabsContent value="properties" className="space-y-6">
+            <PropertyManagement />
           </TabsContent>
 
-          <TabsContent value="transactions">
-            <Suspense fallback={<div>Loading transactions...</div>}>
-              <TransactionMonitor />
-            </Suspense>
+          <TabsContent value="analytics" className="space-y-6">
+            <AnalyticsOverview />
           </TabsContent>
 
-          <TabsContent value="revenue">
-            <Suspense fallback={<div>Loading revenue...</div>}>
-              <RevenueTracking />
-            </Suspense>
+          <TabsContent value="settings" className="space-y-6">
+            <PlatformSettings />
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </div>
   )
 }

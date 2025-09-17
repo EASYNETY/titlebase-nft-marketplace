@@ -1,11 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { paymentsApi } from "@/lib/api/client"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Input } from "@/components/ui/input"
 import { CryptoPayment } from "./crypto-payment"
 import { FiatPayment } from "./fiat-payment"
 import { EscrowOptions } from "./escrow-options"
@@ -20,17 +22,53 @@ interface PaymentModalProps {
     price: string
     seller: string
     image: string
+    assessed_value?: number
+    total_fractions?: number
+    min_fraction?: number
+    max_fraction?: number
   }
   onPaymentComplete: (paymentResult: any) => void
 }
 
 export function PaymentModal({ open, onOpenChange, property, onPaymentComplete }: PaymentModalProps) {
-  const [selectedMethod, setSelectedMethod] = useState<"crypto" | "fiat">("crypto")
+  const [selectedMethod, setSelectedMethod] = useState<"crypto" | "fiat">("fiat")
   const [escrowEnabled, setEscrowEnabled] = useState(true)
   const [escrowPeriod, setEscrowPeriod] = useState(7)
+  const [selectedFractions, setSelectedFractions] = useState(property.max_fraction || 100) // Default max allowed
+  const [paymentOptions, setPaymentOptions] = useState<any[]>([])
+  const [loadingOptions, setLoadingOptions] = useState(true)
 
-  const marketplaceFee = (Number.parseFloat(property.price.replace(/[$,]/g, "")) * 0.01).toLocaleString()
-  const totalAmount = (Number.parseFloat(property.price.replace(/[$,]/g, "")) * 1.01).toLocaleString()
+  useEffect(() => {
+    const fetchPaymentOptions = async () => {
+      if (open) {
+        try {
+          const response = await paymentsApi.getPaymentOptions()
+          setPaymentOptions(response.paymentOptions || [])
+        } catch (error) {
+          console.error('Failed to fetch payment options:', error)
+        } finally {
+          setLoadingOptions(false)
+        }
+      }
+    }
+
+    fetchPaymentOptions()
+  }, [open])
+
+  const cleanPrice = property.price.replace(/[$,]/g, "")
+  const fullEthPrice = Number.parseFloat(cleanPrice)
+  const totalFractions = property.total_fractions || 1000
+  const pricePerFraction = fullEthPrice / totalFractions
+  const selectedFractionPrice = selectedFractions * pricePerFraction
+  const selectedFractionFee = selectedFractionPrice * 0.01
+  const selectedFractionTotal = selectedFractionPrice + selectedFractionFee
+
+  const fullAssessedValue = property.assessed_value || 0
+  const assessedPerFraction = fullAssessedValue / totalFractions
+  const selectedFiatValue = selectedFractions * assessedPerFraction
+
+  const marketplaceFee = selectedFractionFee.toFixed(4)
+  const totalEthAmount = selectedFractionTotal.toFixed(4)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,6 +103,32 @@ export function PaymentModal({ open, onOpenChange, property, onPaymentComplete }
             </CardContent>
           </Card>
 
+          {/* Fraction Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Fractional Ownership</CardTitle>
+              <p className="text-sm text-muted-foreground">Select the number of fractions to purchase (1-{property.max_fraction} of {totalFractions} total)</p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={property.min_fraction || 1}
+                    max={property.max_fraction || 100}
+                    value={selectedFractions}
+                    onChange={(e) => setSelectedFractions(Math.max(property.min_fraction || 1, Math.min(property.max_fraction || 100, Number(e.target.value))))}
+                    className="w-20"
+                  />
+                  <span>fractions of {property.title}</span>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  You are purchasing {selectedFractions} fractions ({(selectedFractions / totalFractions * 100).toFixed(2)}%). This entitles you to {selectedFiatValue.toLocaleString()} USD value and proportional rental income.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Payment Breakdown */}
           <Card>
             <CardHeader>
@@ -72,12 +136,20 @@ export function PaymentModal({ open, onOpenChange, property, onPaymentComplete }
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between">
-                <span>Property Price</span>
-                <span className="font-semibold">{property.price}</span>
+                <span>Full Assessed Value</span>
+                <span className="font-semibold line-through text-muted-foreground">${fullAssessedValue.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span>Marketplace Fee (1%)</span>
-                <span>${marketplaceFee}</span>
+                <span>Your Share Value ({(selectedFractions / totalFractions * 100).toFixed(2)}%)</span>
+                <span className="font-semibold">${selectedFiatValue.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>ETH Cost ({selectedFractions} fractions)</span>
+                <span className="font-semibold">{totalEthAmount} ETH</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Marketplace Fee (1% of ETH)</span>
+                <span>{marketplaceFee} ETH</span>
               </div>
               {escrowEnabled && (
                 <div className="flex justify-between">
@@ -90,8 +162,8 @@ export function PaymentModal({ open, onOpenChange, property, onPaymentComplete }
               )}
               <Separator />
               <div className="flex justify-between text-lg font-semibold">
-                <span>Total Amount</span>
-                <span>${totalAmount}</span>
+                <span>Total ETH Amount</span>
+                <span>{totalEthAmount} ETH</span>
               </div>
             </CardContent>
           </Card>
@@ -104,6 +176,37 @@ export function PaymentModal({ open, onOpenChange, property, onPaymentComplete }
             onPeriodChange={setEscrowPeriod}
           />
 
+          {/* Available Payment Options */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Available Payment Options</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingOptions ? (
+                <div className="text-center py-4">Loading payment options...</div>
+              ) : paymentOptions.length > 0 ? (
+                <div className="space-y-4">
+                  {paymentOptions.map((option) => (
+                    <div key={option.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="space-y-1">
+                        <h4 className="font-medium">{option.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {option.type.toUpperCase()} - {option.currency} via {option.provider}
+                        </p>
+                        {option.fee_percentage > 0 && (
+                          <p className="text-xs text-muted-foreground">Fee: {option.fee_percentage * 100}%</p>
+                        )}
+                      </div>
+                      <Badge variant={option.is_active ? "default" : "secondary"}>{option.is_active ? "Active" : "Inactive"}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">No payment options available</div>
+              )}
+            </CardContent>
+          </Card>
+        
           {/* Payment Methods */}
           <Card>
             <CardHeader>
@@ -121,24 +224,28 @@ export function PaymentModal({ open, onOpenChange, property, onPaymentComplete }
                     Traditional Payment
                   </TabsTrigger>
                 </TabsList>
-
+             
                 <TabsContent value="crypto" className="mt-6">
                   <CryptoPayment
-                    amount={totalAmount}
+                    amount={totalEthAmount}
                     recipient={property.seller}
                     propertyId={property.id}
+                    fractions={selectedFractions}
+                    totalFractions={totalFractions}
                     escrowEnabled={escrowEnabled}
                     escrowPeriod={escrowPeriod}
-                    onPaymentComplete={onPaymentComplete}
+                    onPaymentComplete={(result) => onPaymentComplete({ ...result, fractions: selectedFractions })}
                   />
                 </TabsContent>
-
+             
                 <TabsContent value="fiat" className="mt-6">
                   <FiatPayment
-                    amount={totalAmount}
+                    amount={selectedFiatValue.toLocaleString()}
                     propertyId={property.id}
+                    fractions={selectedFractions}
+                    totalFractions={totalFractions}
                     escrowEnabled={escrowEnabled}
-                    onPaymentComplete={onPaymentComplete}
+                    onPaymentComplete={(result) => onPaymentComplete({ ...result, fractions: selectedFractions })}
                   />
                 </TabsContent>
               </Tabs>
@@ -154,7 +261,7 @@ export function PaymentModal({ open, onOpenChange, property, onPaymentComplete }
                   <p className="font-medium text-blue-900">Secure Transaction</p>
                   <p className="text-sm text-blue-700">
                     Your payment is protected by blockchain technology and smart contract escrow. Funds are only
-                    released when both parties confirm the transaction or after the escrow period expires.
+                    released when both parties confirm the transaction or after the escrow period expires. You will receive fractional NFT tokens representing your ownership share.
                   </p>
                 </div>
               </div>

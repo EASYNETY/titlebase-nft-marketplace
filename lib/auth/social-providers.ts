@@ -6,6 +6,9 @@ export interface SocialProvider {
   handleCallback: (code: string) => Promise<{ user: any; tokens: any }>
 }
 
+// Import the API client
+import { authApi } from "@/lib/api/client"
+
 export const socialProviders: Record<string, SocialProvider> = {
   google: {
     id: "google",
@@ -22,12 +25,8 @@ export const socialProviders: Record<string, SocialProvider> = {
       return `https://accounts.google.com/o/oauth2/v2/auth?${params}`
     },
     handleCallback: async (code: string) => {
-      const response = await fetch("/api/auth/google/callback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      })
-      return response.json()
+      const result = await authApi.googleCallback(code) as any
+      return { user: result.user, tokens: { access_token: result.token } }
     },
   },
   twitter: {
