@@ -154,7 +154,7 @@ export function PropertyCard({
                 <div className="text-xl font-bold text-primary">{price}</div>
               </>
             )}
-            <div className="text-sm text-muted-foreground">Assessed Value: {assessedValue}</div>
+            <div className="text-sm text-muted-foreground">Assessed Value:NZD {assessedValue}</div>
           </div>
 
           {/* Action Button */}

@@ -64,7 +64,7 @@ export default function HomePage() {
               </Link>
             </Button>
             <Button size="lg" variant="outline" asChild className="border-white text-white hover:bg-white/10">
-              <Link href="/auth/login">
+              <Link href="/login">
                 Get Started
               </Link>
             </Button>
