@@ -50,10 +50,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-// Connect to database
+// Initialize database connection
 connectDB().catch((error) => {
   console.error('Failed to connect to database:', error);
-  process.exit(1);
 });
 
+// Export for local development
+export default app;
+
+// Export for AWS Lambda
 export const handler = serverless(app);

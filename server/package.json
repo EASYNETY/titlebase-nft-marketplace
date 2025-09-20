@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
+    "deploy": "serverless deploy --stage dev --profile easynet",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -19,6 +20,9 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.3.1",
     "nodemon": "^3.1.10",
+    "serverless": "^4.19.1",
+    "serverless-http": "^4.0.0",
+    "serverless-offline": "^14.4.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   },
@@ -26,11 +30,11 @@
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
+    "ethers": "^6.15.0",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.5",
-    "serverless-http": "^4.0.0",
     "uuid": "^13.0.0"
   }
 }

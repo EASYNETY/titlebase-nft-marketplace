@@ -13,6 +13,10 @@ router.get('/listings', async (req, res) => {
     const pageNum = Number.parseInt(page as string);
     const limitNum = Number.parseInt(limit as string);
 
+    if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {
+      return res.status(400).json({ error: 'Invalid page or limit parameters' });
+    }
+
     let sqlQuery = `
       SELECT l.*, p.title as property_title, p.description as property_description,
              p.images as property_images, p.assessed_value, u.username as seller_username,
@@ -33,12 +37,11 @@ router.get('/listings', async (req, res) => {
       params.push(propertyId);
     }
 
-    // MySQL server-side prepared statements don't accept bound parameters for LIMIT/OFFSET.
-    // Compute safe integers and inline them to avoid "Incorrect arguments to mysqld_stmt_execute".
-    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 && limitNum <= 100 ? limitNum : 20;
-    const safeOffset = Number.isFinite(pageNum) && pageNum > 0 ? (pageNum - 1) * safeLimit : 0;
-
-    sqlQuery += ` ORDER BY l.created_at DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
+    sqlQuery += " ORDER BY l.created_at DESC LIMIT ? OFFSET ?";
+    const offset = (pageNum - 1) * limitNum;
+    params.push(limitNum, offset);
+    console.log('SQL Query:', sqlQuery);
+    console.log('Query params:', params.map(p => typeof p + ': ' + p)); // Debug log with types
 
     const listings = await query(sqlQuery, params);
 
@@ -73,7 +76,8 @@ router.get('/listings', async (req, res) => {
     });
   } catch (error) {
     console.error('Get listings error:', error);
-    res.status(500).json({ error: 'Failed to fetch listings', details: (error as Error).message });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to fetch listings', details: errorMessage });
   }
 });
 
@@ -146,7 +150,8 @@ router.post('/listings', authenticateToken, async (req: AuthRequest, res) => {
     });
   } catch (error) {
     console.error('Create listing error:', error);
-    res.status(500).json({ error: 'Failed to create listing' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to create listing', details: errorMessage });
   }
 });
 
@@ -179,7 +184,8 @@ router.get('/listings/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Get listing error:', error);
-    res.status(500).json({ error: 'Failed to fetch listing' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to fetch listing', details: errorMessage });
   }
 });
 
@@ -236,7 +242,8 @@ router.put('/listings/:id', authenticateToken, async (req: AuthRequest, res) => 
     });
   } catch (error) {
     console.error('Update listing error:', error);
-    res.status(500).json({ error: 'Failed to update listing' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to update listing', details: errorMessage });
   }
 });
 
@@ -263,7 +270,8 @@ router.delete('/listings/:id', authenticateToken, async (req: AuthRequest, res) 
     res.json({ message: 'Listing cancelled successfully' });
   } catch (error) {
     console.error('Delete listing error:', error);
-    res.status(500).json({ error: 'Failed to cancel listing' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to cancel listing', details: errorMessage });
   }
 });
 
@@ -303,7 +311,8 @@ router.get('/bids', async (req, res) => {
     res.json({ bids });
   } catch (error) {
     console.error('Get bids error:', error);
-    res.status(500).json({ error: 'Failed to fetch bids' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to fetch bids', details: errorMessage });
   }
 });
 
@@ -377,7 +386,8 @@ router.post('/bids', authenticateToken, async (req: AuthRequest, res) => {
     res.status(201).json({ bid });
   } catch (error) {
     console.error('Create bid error:', error);
-    res.status(500).json({ error: 'Failed to create bid' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to create bid', details: errorMessage });
   }
 });
 
@@ -404,7 +414,8 @@ router.get('/bids/:id', async (req, res) => {
     res.json({ bid });
   } catch (error) {
     console.error('Get bid error:', error);
-    res.status(500).json({ error: 'Failed to fetch bid' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to fetch bid', details: errorMessage });
   }
 });
 
@@ -457,7 +468,8 @@ router.put('/bids/:id', authenticateToken, async (req: AuthRequest, res) => {
     res.json({ bid });
   } catch (error) {
     console.error('Update bid error:', error);
-    res.status(500).json({ error: 'Failed to update bid' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to update bid', details: errorMessage });
   }
 });
 
@@ -484,7 +496,8 @@ router.delete('/bids/:id', authenticateToken, async (req: AuthRequest, res) => {
     res.json({ message: 'Bid cancelled successfully' });
   } catch (error) {
     console.error('Delete bid error:', error);
-    res.status(500).json({ error: 'Failed to cancel bid' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to cancel bid', details: errorMessage });
   }
 });
 
