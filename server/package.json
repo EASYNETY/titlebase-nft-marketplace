@@ -30,6 +30,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.5",
+    "serverless-http": "^4.0.0",
     "uuid": "^13.0.0"
   }
 }

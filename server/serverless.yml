@@ -1,0 +1,32 @@
+service: titlebase-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    NODE_ENV: ${self:provider.stage}
+    DB_HOST: 3.80.241.11
+    DB_USER: admin
+    DB_PASSWORD: Qw3rtyUIOP!#2025
+    DB_NAME: nft_marketplace
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:*
+        - s3:*
+        - rds:*
+        - secretsmanager:*
+      Resource: "*"
+
+functions:
+  api:
+    handler: src/server.handler
+    events:
+      - httpApi:
+          path: /api/{proxy+}
+          method: '*'
+      - httpApi:
+          path: /{proxy+}
+          method: '*'

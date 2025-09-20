@@ -33,8 +33,12 @@ router.get('/listings', async (req, res) => {
       params.push(propertyId);
     }
 
-    sqlQuery += " ORDER BY l.created_at DESC LIMIT ? OFFSET ?";
-    params.push(limitNum, (pageNum - 1) * limitNum);
+    // MySQL server-side prepared statements don't accept bound parameters for LIMIT/OFFSET.
+    // Compute safe integers and inline them to avoid "Incorrect arguments to mysqld_stmt_execute".
+    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 && limitNum <= 100 ? limitNum : 20;
+    const safeOffset = Number.isFinite(pageNum) && pageNum > 0 ? (pageNum - 1) * safeLimit : 0;
+
+    sqlQuery += ` ORDER BY l.created_at DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
     const listings = await query(sqlQuery, params);
 
@@ -69,7 +73,7 @@ router.get('/listings', async (req, res) => {
     });
   } catch (error) {
     console.error('Get listings error:', error);
-    res.status(500).json({ error: 'Failed to fetch listings' });
+    res.status(500).json({ error: 'Failed to fetch listings', details: (error as Error).message });
   }
 });
 
